@@ -17,11 +17,10 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+import tf_slim as slim
 
 from nets.nasnet import nasnet
-
-slim = tf.contrib.slim
 
 
 class NASNetTest(tf.test.TestCase):
@@ -30,7 +29,7 @@ class NASNetTest(tf.test.TestCase):
     batch_size = 5
     height, width = 32, 32
     num_classes = 10
-    inputs = tf.random_uniform((batch_size, height, width, 3))
+    inputs = tf.random.uniform((batch_size, height, width, 3))
     tf.train.create_global_step()
     with slim.arg_scope(nasnet.nasnet_cifar_arg_scope()):
       logits, end_points = nasnet.build_nasnet_cifar(inputs, num_classes)
@@ -47,7 +46,7 @@ class NASNetTest(tf.test.TestCase):
     batch_size = 5
     height, width = 224, 224
     num_classes = 1000
-    inputs = tf.random_uniform((batch_size, height, width, 3))
+    inputs = tf.random.uniform((batch_size, height, width, 3))
     tf.train.create_global_step()
     with slim.arg_scope(nasnet.nasnet_mobile_arg_scope()):
       logits, end_points = nasnet.build_nasnet_mobile(inputs, num_classes)
@@ -64,7 +63,7 @@ class NASNetTest(tf.test.TestCase):
     batch_size = 5
     height, width = 331, 331
     num_classes = 1000
-    inputs = tf.random_uniform((batch_size, height, width, 3))
+    inputs = tf.random.uniform((batch_size, height, width, 3))
     tf.train.create_global_step()
     with slim.arg_scope(nasnet.nasnet_large_arg_scope()):
       logits, end_points = nasnet.build_nasnet_large(inputs, num_classes)
@@ -81,7 +80,7 @@ class NASNetTest(tf.test.TestCase):
     batch_size = 5
     height, width = 32, 32
     num_classes = None
-    inputs = tf.random_uniform((batch_size, height, width, 3))
+    inputs = tf.random.uniform((batch_size, height, width, 3))
     tf.train.create_global_step()
     with slim.arg_scope(nasnet.nasnet_cifar_arg_scope()):
       net, end_points = nasnet.build_nasnet_cifar(inputs, num_classes)
@@ -94,7 +93,7 @@ class NASNetTest(tf.test.TestCase):
     batch_size = 5
     height, width = 224, 224
     num_classes = None
-    inputs = tf.random_uniform((batch_size, height, width, 3))
+    inputs = tf.random.uniform((batch_size, height, width, 3))
     tf.train.create_global_step()
     with slim.arg_scope(nasnet.nasnet_mobile_arg_scope()):
       net, end_points = nasnet.build_nasnet_mobile(inputs, num_classes)
@@ -107,7 +106,7 @@ class NASNetTest(tf.test.TestCase):
     batch_size = 5
     height, width = 331, 331
     num_classes = None
-    inputs = tf.random_uniform((batch_size, height, width, 3))
+    inputs = tf.random.uniform((batch_size, height, width, 3))
     tf.train.create_global_step()
     with slim.arg_scope(nasnet.nasnet_large_arg_scope()):
       net, end_points = nasnet.build_nasnet_large(inputs, num_classes)
@@ -120,7 +119,7 @@ class NASNetTest(tf.test.TestCase):
     batch_size = 5
     height, width = 32, 32
     num_classes = 10
-    inputs = tf.random_uniform((batch_size, height, width, 3))
+    inputs = tf.random.uniform((batch_size, height, width, 3))
     tf.train.create_global_step()
     with slim.arg_scope(nasnet.nasnet_cifar_arg_scope()):
       _, end_points = nasnet.build_nasnet_cifar(inputs, num_classes)
@@ -164,7 +163,7 @@ class NASNetTest(tf.test.TestCase):
     num_classes = 10
     for use_aux_head in (True, False):
       tf.reset_default_graph()
-      inputs = tf.random_uniform((batch_size, height, width, 3))
+      inputs = tf.random.uniform((batch_size, height, width, 3))
       tf.train.create_global_step()
       config = nasnet.cifar_config()
       config.set_hparam('use_aux_head', int(use_aux_head))
@@ -177,7 +176,7 @@ class NASNetTest(tf.test.TestCase):
     batch_size = 5
     height, width = 224, 224
     num_classes = 1000
-    inputs = tf.random_uniform((batch_size, height, width, 3))
+    inputs = tf.random.uniform((batch_size, height, width, 3))
     tf.train.create_global_step()
     with slim.arg_scope(nasnet.nasnet_mobile_arg_scope()):
       _, end_points = nasnet.build_nasnet_mobile(inputs, num_classes)
@@ -215,7 +214,7 @@ class NASNetTest(tf.test.TestCase):
     num_classes = 1000
     for use_aux_head in (True, False):
       tf.reset_default_graph()
-      inputs = tf.random_uniform((batch_size, height, width, 3))
+      inputs = tf.random.uniform((batch_size, height, width, 3))
       tf.train.create_global_step()
       config = nasnet.mobile_imagenet_config()
       config.set_hparam('use_aux_head', int(use_aux_head))
@@ -228,7 +227,7 @@ class NASNetTest(tf.test.TestCase):
     batch_size = 5
     height, width = 331, 331
     num_classes = 1000
-    inputs = tf.random_uniform((batch_size, height, width, 3))
+    inputs = tf.random.uniform((batch_size, height, width, 3))
     tf.train.create_global_step()
     with slim.arg_scope(nasnet.nasnet_large_arg_scope()):
       _, end_points = nasnet.build_nasnet_large(inputs, num_classes)
@@ -272,7 +271,7 @@ class NASNetTest(tf.test.TestCase):
     num_classes = 1000
     for use_aux_head in (True, False):
       tf.reset_default_graph()
-      inputs = tf.random_uniform((batch_size, height, width, 3))
+      inputs = tf.random.uniform((batch_size, height, width, 3))
       tf.train.create_global_step()
       config = nasnet.large_imagenet_config()
       config.set_hparam('use_aux_head', int(use_aux_head))
@@ -285,7 +284,7 @@ class NASNetTest(tf.test.TestCase):
     batch_size = 5
     height, width = 224, 224
     num_classes = 1000
-    inputs = tf.random_uniform((batch_size, height, width, 3))
+    inputs = tf.random.uniform((batch_size, height, width, 3))
     tf.train.create_global_step()
     # Force all Variables to reside on the device.
     with tf.variable_scope('on_cpu'), tf.device('/cpu:0'):
@@ -294,9 +293,11 @@ class NASNetTest(tf.test.TestCase):
     with tf.variable_scope('on_gpu'), tf.device('/gpu:0'):
       with slim.arg_scope(nasnet.nasnet_mobile_arg_scope()):
         nasnet.build_nasnet_mobile(inputs, num_classes)
-    for v in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='on_cpu'):
+    for v in tf.get_collection(
+        tf.GraphKeys.GLOBAL_VARIABLES, scope='on_cpu'):
       self.assertDeviceEqual(v.device, '/cpu:0')
-    for v in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='on_gpu'):
+    for v in tf.get_collection(
+        tf.GraphKeys.GLOBAL_VARIABLES, scope='on_gpu'):
       self.assertDeviceEqual(v.device, '/gpu:0')
 
   def testUnknownBatchSizeMobileModel(self):
@@ -309,7 +310,7 @@ class NASNetTest(tf.test.TestCase):
         logits, _ = nasnet.build_nasnet_mobile(inputs, num_classes)
       self.assertListEqual(logits.get_shape().as_list(),
                            [None, num_classes])
-      images = tf.random_uniform((batch_size, height, width, 3))
+      images = tf.random.uniform((batch_size, height, width, 3))
       sess.run(tf.global_variables_initializer())
       output = sess.run(logits, {inputs: images.eval()})
       self.assertEquals(output.shape, (batch_size, num_classes))
@@ -319,12 +320,12 @@ class NASNetTest(tf.test.TestCase):
     height, width = 224, 224
     num_classes = 1000
     with self.test_session() as sess:
-      eval_inputs = tf.random_uniform((batch_size, height, width, 3))
+      eval_inputs = tf.random.uniform((batch_size, height, width, 3))
       with slim.arg_scope(nasnet.nasnet_mobile_arg_scope()):
         logits, _ = nasnet.build_nasnet_mobile(eval_inputs,
                                                num_classes,
                                                is_training=False)
-      predictions = tf.argmax(logits, 1)
+      predictions = tf.argmax(input=logits, axis=1)
       sess.run(tf.global_variables_initializer())
       output = sess.run(predictions)
       self.assertEquals(output.shape, (batch_size,))
@@ -333,7 +334,7 @@ class NASNetTest(tf.test.TestCase):
     batch_size = 5
     height, width = 32, 32
     num_classes = 10
-    inputs = tf.random_uniform((batch_size, height, width, 3))
+    inputs = tf.random.uniform((batch_size, height, width, 3))
     tf.train.create_global_step()
     config = nasnet.cifar_config()
     config.set_hparam('data_format', 'NCHW')
@@ -347,7 +348,7 @@ class NASNetTest(tf.test.TestCase):
     batch_size = 5
     height, width = 224, 224
     num_classes = 1000
-    inputs = tf.random_uniform((batch_size, height, width, 3))
+    inputs = tf.random.uniform((batch_size, height, width, 3))
     tf.train.create_global_step()
     config = nasnet.mobile_imagenet_config()
     config.set_hparam('data_format', 'NCHW')
@@ -361,7 +362,7 @@ class NASNetTest(tf.test.TestCase):
     batch_size = 5
     height, width = 331, 331
     num_classes = 1000
-    inputs = tf.random_uniform((batch_size, height, width, 3))
+    inputs = tf.random.uniform((batch_size, height, width, 3))
     tf.train.create_global_step()
     config = nasnet.large_imagenet_config()
     config.set_hparam('data_format', 'NCHW')
@@ -375,7 +376,7 @@ class NASNetTest(tf.test.TestCase):
     batch_size = 5
     height, width = 32, 32
     num_classes = 10
-    inputs = tf.random_uniform((batch_size, height, width, 3))
+    inputs = tf.random.uniform((batch_size, height, width, 3))
     global_step = tf.train.create_global_step()
     with slim.arg_scope(nasnet.nasnet_cifar_arg_scope()):
       logits, end_points = nasnet.build_nasnet_cifar(inputs,
@@ -389,6 +390,22 @@ class NASNetTest(tf.test.TestCase):
                          [batch_size, num_classes])
     self.assertListEqual(predictions.get_shape().as_list(),
                          [batch_size, num_classes])
+
+  def testUseBoundedAcitvationCifarModel(self):
+    batch_size = 1
+    height, width = 32, 32
+    num_classes = 10
+    for use_bounded_activation in (True, False):
+      tf.reset_default_graph()
+      inputs = tf.random.uniform((batch_size, height, width, 3))
+      config = nasnet.cifar_config()
+      config.set_hparam('use_bounded_activation', use_bounded_activation)
+      with slim.arg_scope(nasnet.nasnet_cifar_arg_scope()):
+        _, _ = nasnet.build_nasnet_cifar(
+            inputs, num_classes, config=config)
+      for node in tf.get_default_graph().as_graph_def().node:
+        if node.op.startswith('Relu'):
+          self.assertEqual(node.op == 'Relu6', use_bounded_activation)
 
 if __name__ == '__main__':
   tf.test.main()

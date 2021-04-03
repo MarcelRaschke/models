@@ -1,3 +1,4 @@
+# Lint as: python2, python3
 # Copyright 2017 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,10 +23,15 @@ Keypoints could be used to represent the human body joint locations as in
 Mask RCNN paper. Or they could be used to represent different part locations of
 objects.
 """
-import tensorflow as tf
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
+from six.moves import range
+import tensorflow.compat.v1 as tf
+import tf_slim as slim
 
 from object_detection.predictors.heads import head
-slim = tf.contrib.slim
 
 
 class MaskRCNNKeypointHead(head.Head):

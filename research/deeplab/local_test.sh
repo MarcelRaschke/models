@@ -19,7 +19,7 @@
 #
 # Usage:
 #   # From the tensorflow/models/research/deeplab directory.
-#   sh ./local_test.sh
+#   bash ./local_test.sh
 #
 #
 
@@ -37,12 +37,12 @@ CURRENT_DIR=$(pwd)
 WORK_DIR="${CURRENT_DIR}/deeplab"
 
 # Run model_test first to make sure the PYTHONPATH is correctly set.
-python "${WORK_DIR}"/model_test.py -v
+python "${WORK_DIR}"/model_test.py
 
 # Go to datasets folder and download PASCAL VOC 2012 segmentation dataset.
 DATASET_DIR="datasets"
 cd "${WORK_DIR}/${DATASET_DIR}"
-sh download_and_convert_voc2012.sh
+bash download_and_convert_voc2012.sh
 
 # Go back to original directory.
 cd "${CURRENT_DIR}"
@@ -82,8 +82,7 @@ python "${WORK_DIR}"/train.py \
   --atrous_rates=18 \
   --output_stride=16 \
   --decoder_output_stride=4 \
-  --train_crop_size=513 \
-  --train_crop_size=513 \
+  --train_crop_size="513,513" \
   --train_batch_size=4 \
   --training_number_of_steps="${NUM_ITERATIONS}" \
   --fine_tune_batch_norm=true \
@@ -103,8 +102,7 @@ python "${WORK_DIR}"/eval.py \
   --atrous_rates=18 \
   --output_stride=16 \
   --decoder_output_stride=4 \
-  --eval_crop_size=513 \
-  --eval_crop_size=513 \
+  --eval_crop_size="513,513" \
   --checkpoint_dir="${TRAIN_LOGDIR}" \
   --eval_logdir="${EVAL_LOGDIR}" \
   --dataset_dir="${PASCAL_DATASET}" \
@@ -120,8 +118,7 @@ python "${WORK_DIR}"/vis.py \
   --atrous_rates=18 \
   --output_stride=16 \
   --decoder_output_stride=4 \
-  --vis_crop_size=513 \
-  --vis_crop_size=513 \
+  --vis_crop_size="513,513" \
   --checkpoint_dir="${TRAIN_LOGDIR}" \
   --vis_logdir="${VIS_LOGDIR}" \
   --dataset_dir="${PASCAL_DATASET}" \

@@ -24,17 +24,18 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+import tf_slim as slim
 
-slim = tf.contrib.slim
 
-
-def inception_arg_scope(weight_decay=0.00004,
-                        use_batch_norm=True,
-                        batch_norm_decay=0.9997,
-                        batch_norm_epsilon=0.001,
-                        activation_fn=tf.nn.relu,
-                        batch_norm_updates_collections=tf.GraphKeys.UPDATE_OPS):
+def inception_arg_scope(
+    weight_decay=0.00004,
+    use_batch_norm=True,
+    batch_norm_decay=0.9997,
+    batch_norm_epsilon=0.001,
+    activation_fn=tf.nn.relu,
+    batch_norm_updates_collections=tf.GraphKeys.UPDATE_OPS,
+    batch_norm_scale=False):
   """Defines the default arg scope for inception models.
 
   Args:
@@ -46,6 +47,8 @@ def inception_arg_scope(weight_decay=0.00004,
     activation_fn: Activation function for conv2d.
     batch_norm_updates_collections: Collection for the update ops for
       batch norm.
+    batch_norm_scale: If True, uses an explicit `gamma` multiplier to scale the
+      activations in the batch normalization layer.
 
   Returns:
     An `arg_scope` to use for the inception models.
@@ -59,6 +62,7 @@ def inception_arg_scope(weight_decay=0.00004,
       'updates_collections': batch_norm_updates_collections,
       # use fused batch norm if possible.
       'fused': None,
+      'scale': batch_norm_scale,
   }
   if use_batch_norm:
     normalizer_fn = slim.batch_norm

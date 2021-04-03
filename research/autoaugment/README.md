@@ -1,8 +1,11 @@
+![TensorFlow Requirement: 1.x](https://img.shields.io/badge/TensorFlow%20Requirement-1.x-brightgreen)
+![TensorFlow 2 Not Supported](https://img.shields.io/badge/TensorFlow%202%20Not%20Supported-%E2%9C%95-red.svg)
+
 <font size=4><b>Train Wide-ResNet, Shake-Shake and ShakeDrop models on CIFAR-10
 and CIFAR-100 dataset with AutoAugment.</b></font>
 
 The CIFAR-10/CIFAR-100 data can be downloaded from:
-https://www.cs.toronto.edu/~kriz/cifar.html.
+https://www.cs.toronto.edu/~kriz/cifar.html. Use the Python version instead of the binary version.
 
 The code replicates the results from Tables 1 and 2 on CIFAR-10/100 with the
 following models: Wide-ResNet-28-10, Shake-Shake (26 2x32d), Shake-Shake (26
@@ -37,13 +40,13 @@ PyramidNet + ShakeDrop | 0.05          | 5e-5         | 1800        | 64
 
 <b>Prerequisite:</b>
 
-1.  Install TensorFlow.
+1.  Install TensorFlow. Be sure to run the code using python2 and not python3.
 
 2.  Download CIFAR-10/CIFAR-100 dataset.
 
 ```shell
-curl -o cifar-10-binary.tar.gz https://www.cs.toronto.edu/~kriz/cifar-10-binary.tar.gz
-curl -o cifar-100-binary.tar.gz https://www.cs.toronto.edu/~kriz/cifar-100-binary.tar.gz
+curl -o cifar-10-binary.tar.gz https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz
+curl -o cifar-100-binary.tar.gz https://www.cs.toronto.edu/~kriz/cifar-100-python.tar.gz
 ```
 
 <b>How to run:</b>

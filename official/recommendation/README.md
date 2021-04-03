@@ -4,7 +4,7 @@ This is an implementation of the Neural Collaborative Filtering (NCF) framework 
 
 NCF is a general framework for collaborative filtering of recommendations in which a neural network architecture is used to model user-item interactions. Unlike traditional models, NCF does not resort to Matrix Factorization (MF) with an inner product on latent features of users and items. It replaces the inner product with a multi-layer perceptron that can learn an arbitrary function from data.
 
-Two instantiations of NCF are Generalized Matrix Factorization (GMF) and Multi-Layer Perceptron (MLP). GMF applies a linear kernel to model the latent feature interactions, and and MLP uses a nonlinear kernel to learn the interaction function from data. NeuMF is a fused model of GMF and MLP to better model the complex user-item interactions, and unifies the strengths of linearity of MF and non-linearity of MLP for modeling the user-item latent structures. NeuMF allows GMF and MLP to learn separate embeddings, and combines the two models by concatenating their last hidden layer. [neumf_model.py](neumf_model.py) defines the architecture details.
+Two instantiations of NCF are Generalized Matrix Factorization (GMF) and Multi-Layer Perceptron (MLP). GMF applies a linear kernel to model the latent feature interactions, and MLP uses a nonlinear kernel to learn the interaction function from data. NeuMF is a fused model of GMF and MLP to better model the complex user-item interactions, and unifies the strengths of linearity of MF and non-linearity of MLP for modeling the user-item latent structures. NeuMF allows GMF and MLP to learn separate embeddings, and combines the two models by concatenating their last hidden layer. [neumf_model.py](neumf_model.py) defines the architecture details.
 
 Some abbreviations used the code base include:
   - NCF: Neural Collaborative Filtering
@@ -43,7 +43,7 @@ In both datasets, the timestamp is represented in seconds since midnight Coordin
 ### Download and preprocess dataset
 To download the dataset, please install Pandas package first. Then issue the following command:
 ```
-python ../datasets/movielens.py
+python movielens.py
 ```
 Arguments:
   * `--data_dir`: Directory where to download and save the preprocessed data. By default, it is `/tmp/movielens-data/`.
@@ -55,17 +55,18 @@ Note the ml-20m dataset is large (the rating file is ~500 MB), and it may take s
 Both the ml-1m and ml-20m datasets will be coerced into a common format when downloaded.
 
 ### Train and evaluate model
+
+[ncf_keras_main.py](ncf_keras_main.py) is the Keras trainer that supports
+features in TF 2.x. Users can train the model on both GPU and TPU.
+
 To train and evaluate the model, issue the following command:
 ```
-python ncf_main.py
+python ncf_keras_main.py
 ```
 Arguments:
   * `--model_dir`: Directory to save model training checkpoints. By default, it is `/tmp/ncf/`.
   * `--data_dir`: This should be set to the same directory given to the `data_download`'s `data_dir` argument.
   * `--dataset`: The dataset name to be downloaded and preprocessed. By default, it is `ml-1m`.
+  * `--num_gpus`: The number of GPUs used for training/evaluation of the model. Use CPU if this flag is 0. By default, it is 1.
 
-There are other arguments about models and training process. Use the `--help` or `-h` flag to get a full list of possible arguments with detailed descriptions.
-
-## Benchmarks (TODO)
-### Training times
-### Evaluation results
+There are other arguments about models and training process. Refer to the [Flags package](https://abseil.io/docs/python/guides/flags) documentation or use the `--helpfull` flag to get a full list of possible arguments with detailed descriptions.

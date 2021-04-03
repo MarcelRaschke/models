@@ -19,7 +19,7 @@ DetectionModel.
 """
 
 import logging
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from object_detection import eval_util
 from object_detection.core import prefetcher
@@ -39,14 +39,23 @@ EVAL_METRICS_CLASS_DICT = {
         object_detection_evaluation.PascalInstanceSegmentationEvaluator,
     'weighted_pascal_voc_instance_segmentation_metrics':
         object_detection_evaluation.WeightedPascalInstanceSegmentationEvaluator,
+    'oid_V2_detection_metrics':
+        object_detection_evaluation.OpenImagesDetectionEvaluator,
+    # DEPRECATED: please use oid_V2_detection_metrics instead
     'open_images_V2_detection_metrics':
         object_detection_evaluation.OpenImagesDetectionEvaluator,
     'coco_detection_metrics':
         coco_evaluation.CocoDetectionEvaluator,
     'coco_mask_metrics':
         coco_evaluation.CocoMaskEvaluator,
+    'oid_challenge_detection_metrics':
+        object_detection_evaluation.OpenImagesDetectionChallengeEvaluator,
+    # DEPRECATED: please use oid_challenge_detection_metrics instead
     'oid_challenge_object_detection_metrics':
         object_detection_evaluation.OpenImagesDetectionChallengeEvaluator,
+    'oid_challenge_segmentation_metrics':
+        object_detection_evaluation
+        .OpenImagesInstanceSegmentationChallengeEvaluator,
 }
 
 EVAL_DEFAULT_METRIC = 'pascal_voc_detection_metrics'
@@ -74,7 +83,7 @@ def _extract_predictions_and_losses(model,
   input_dict = prefetch_queue.dequeue()
   original_image = tf.expand_dims(input_dict[fields.InputDataFields.image], 0)
   preprocessed_image, true_image_shapes = model.preprocess(
-      tf.to_float(original_image))
+      tf.cast(original_image, dtype=tf.float32))
   prediction_dict = model.predict(preprocessed_image, true_image_shapes)
   detections = model.postprocess(prediction_dict, true_image_shapes)
 
@@ -146,6 +155,16 @@ def get_evaluators(eval_config, categories):
   for eval_metric_fn_key in eval_metric_fn_keys:
     if eval_metric_fn_key not in EVAL_METRICS_CLASS_DICT:
       raise ValueError('Metric not found: {}'.format(eval_metric_fn_key))
+    if eval_metric_fn_key == 'oid_challenge_object_detection_metrics':
+      logging.warning(
+          'oid_challenge_object_detection_metrics is deprecated; '
+          'use oid_challenge_detection_metrics instead'
+      )
+    if eval_metric_fn_key == 'oid_V2_detection_metrics':
+      logging.warning(
+          'open_images_V2_detection_metrics is deprecated; '
+          'use oid_V2_detection_metrics instead'
+      )
     evaluators_list.append(
         EVAL_METRICS_CLASS_DICT[eval_metric_fn_key](categories=categories))
   return evaluators_list

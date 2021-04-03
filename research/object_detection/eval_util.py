@@ -13,24 +13,35 @@
 # limitations under the License.
 # ==============================================================================
 """Common utility functions for evaluation."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import collections
 import os
+import re
 import time
 
 import numpy as np
-import tensorflow as tf
+from six.moves import range
+import tensorflow.compat.v1 as tf
+
+import tf_slim as slim
 
 from object_detection.core import box_list
 from object_detection.core import box_list_ops
 from object_detection.core import keypoint_ops
 from object_detection.core import standard_fields as fields
 from object_detection.metrics import coco_evaluation
+from object_detection.metrics import lvis_evaluation
+from object_detection.protos import eval_pb2
 from object_detection.utils import label_map_util
+from object_detection.utils import object_detection_evaluation
 from object_detection.utils import ops
 from object_detection.utils import shape_utils
 from object_detection.utils import visualization_utils as vis_utils
 
-slim = tf.contrib.slim
+EVAL_KEYPOINT_METRIC = 'coco_keypoint_metrics'
 
 # A dictionary of metric names to classes that implement the metric. The classes
 # in the dictionary must implement
@@ -38,8 +49,31 @@ slim = tf.contrib.slim
 EVAL_METRICS_CLASS_DICT = {
     'coco_detection_metrics':
         coco_evaluation.CocoDetectionEvaluator,
+    'coco_keypoint_metrics':
+        coco_evaluation.CocoKeypointEvaluator,
     'coco_mask_metrics':
         coco_evaluation.CocoMaskEvaluator,
+    'coco_panoptic_metrics':
+        coco_evaluation.CocoPanopticSegmentationEvaluator,
+    'lvis_mask_metrics':
+        lvis_evaluation.LVISMaskEvaluator,
+    'oid_challenge_detection_metrics':
+        object_detection_evaluation.OpenImagesDetectionChallengeEvaluator,
+    'oid_challenge_segmentation_metrics':
+        object_detection_evaluation
+        .OpenImagesInstanceSegmentationChallengeEvaluator,
+    'pascal_voc_detection_metrics':
+        object_detection_evaluation.PascalDetectionEvaluator,
+    'weighted_pascal_voc_detection_metrics':
+        object_detection_evaluation.WeightedPascalDetectionEvaluator,
+    'precision_at_recall_detection_metrics':
+        object_detection_evaluation.PrecisionAtRecallDetectionEvaluator,
+    'pascal_voc_instance_segmentation_metrics':
+        object_detection_evaluation.PascalInstanceSegmentationEvaluator,
+    'weighted_pascal_voc_instance_segmentation_metrics':
+        object_detection_evaluation.WeightedPascalInstanceSegmentationEvaluator,
+    'oid_V2_detection_metrics':
+        object_detection_evaluation.OpenImagesDetectionEvaluator,
 }
 
 EVAL_DEFAULT_METRIC = 'coco_detection_metrics'
@@ -220,7 +254,8 @@ def _run_checkpoint_once(tensor_dict,
                          save_graph=False,
                          save_graph_dir='',
                          losses_dict=None,
-                         eval_export_path=None):
+                         eval_export_path=None,
+                         process_metrics_fn=None):
   """Evaluates metrics defined in evaluators and returns summaries.
 
   This function loads the latest checkpoint in checkpoint_dirs and evaluates
@@ -262,6 +297,12 @@ def _run_checkpoint_once(tensor_dict,
     losses_dict: optional dictionary of scalar detection losses.
     eval_export_path: Path for saving a json file that contains the detection
       results in json format.
+    process_metrics_fn: a callback called with evaluation results after each
+      evaluation is done.  It could be used e.g. to back up checkpoints with
+      best evaluation scores, or to call an external system to update evaluation
+      results in order to drive best hyper-parameter search.  Parameters are:
+      int checkpoint_number, Dict[str, ObjectDetectionEvalMetrics] metrics,
+      str checkpoint_file path.
 
   Returns:
     global_step: the count of global steps.
@@ -278,6 +319,7 @@ def _run_checkpoint_once(tensor_dict,
   sess.run(tf.global_variables_initializer())
   sess.run(tf.local_variables_initializer())
   sess.run(tf.tables_initializer())
+  checkpoint_file = None
   if restore_fn:
     restore_fn(sess)
   else:
@@ -292,7 +334,7 @@ def _run_checkpoint_once(tensor_dict,
 
   counters = {'skipped': 0, 'success': 0}
   aggregate_result_losses_dict = collections.defaultdict(list)
-  with tf.contrib.slim.queues.QueueRunners(sess):
+  with slim.queues.QueueRunners(sess):
     try:
       for batch in range(int(num_batches)):
         if (batch + 1) % 100 == 0:
@@ -357,6 +399,15 @@ def _run_checkpoint_once(tensor_dict,
 
       for key, value in iter(aggregate_result_losses_dict.items()):
         all_evaluator_metrics['Losses/' + key] = np.mean(value)
+      if process_metrics_fn and checkpoint_file:
+        m = re.search(r'model.ckpt-(\d+)$', checkpoint_file)
+        if not m:
+          tf.logging.error('Failed to parse checkpoint number from: %s',
+                           checkpoint_file)
+        else:
+          checkpoint_number = int(m.group(1))
+          process_metrics_fn(checkpoint_number, all_evaluator_metrics,
+                             checkpoint_file)
   sess.close()
   return (global_step, all_evaluator_metrics)
 
@@ -372,11 +423,13 @@ def repeated_checkpoint_run(tensor_dict,
                             num_batches=1,
                             eval_interval_secs=120,
                             max_number_of_evaluations=None,
+                            max_evaluation_global_step=None,
                             master='',
                             save_graph=False,
                             save_graph_dir='',
                             losses_dict=None,
-                            eval_export_path=None):
+                            eval_export_path=None,
+                            process_metrics_fn=None):
   """Periodically evaluates desired tensors using checkpoint_dirs or restore_fn.
 
   This function repeatedly loads a checkpoint and evaluates a desired
@@ -412,6 +465,7 @@ def repeated_checkpoint_run(tensor_dict,
     eval_interval_secs: the number of seconds between each evaluation run.
     max_number_of_evaluations: the max number of iterations of the evaluation.
       If the value is left as None the evaluation continues indefinitely.
+    max_evaluation_global_step: global step when evaluation stops.
     master: the location of the Tensorflow session.
     save_graph: whether or not the Tensorflow graph is saved as a pbtxt file.
     save_graph_dir: where to save on disk the Tensorflow graph. If store_graph
@@ -419,6 +473,12 @@ def repeated_checkpoint_run(tensor_dict,
     losses_dict: optional dictionary of scalar detection losses.
     eval_export_path: Path for saving a json file that contains the detection
       results in json format.
+    process_metrics_fn: a callback called with evaluation results after each
+      evaluation is done.  It could be used e.g. to back up checkpoints with
+      best evaluation scores, or to call an external system to update evaluation
+      results in order to drive best hyper-parameter search.  Parameters are:
+      int checkpoint_number, Dict[str, ObjectDetectionEvalMetrics] metrics,
+      str checkpoint_file path.
 
   Returns:
     metrics: A dictionary containing metric names and values in the latest
@@ -430,7 +490,10 @@ def repeated_checkpoint_run(tensor_dict,
   """
   if max_number_of_evaluations and max_number_of_evaluations <= 0:
     raise ValueError(
-        '`number_of_steps` must be either None or a positive number.')
+        '`max_number_of_evaluations` must be either None or a positive number.')
+  if max_evaluation_global_step and max_evaluation_global_step <= 0:
+    raise ValueError(
+        '`max_evaluation_global_step` must be either None or positive.')
 
   if not checkpoint_dirs:
     raise ValueError('`checkpoint_dirs` must have at least one entry.')
@@ -462,8 +525,13 @@ def repeated_checkpoint_run(tensor_dict,
           save_graph,
           save_graph_dir,
           losses_dict=losses_dict,
-          eval_export_path=eval_export_path)
+          eval_export_path=eval_export_path,
+          process_metrics_fn=process_metrics_fn)
       write_metrics(metrics, global_step, summary_dir)
+      if (max_evaluation_global_step and
+          global_step >= max_evaluation_global_step):
+        tf.logging.info('Finished evaluation!')
+        break
     number_of_evaluations += 1
 
     if (max_number_of_evaluations and
@@ -483,22 +551,112 @@ def _scale_box_to_absolute(args):
       box_list.BoxList(boxes), image_shape[0], image_shape[1]).get()
 
 
-def _resize_detection_masks(args):
-  detection_boxes, detection_masks, image_shape = args
+def _resize_detection_masks(arg_tuple):
+  """Resizes detection masks.
+
+  Args:
+    arg_tuple: A (detection_boxes, detection_masks, image_shape, pad_shape)
+      tuple where
+      detection_boxes is a tf.float32 tensor of size [num_masks, 4] containing
+        the box corners. Row i contains [ymin, xmin, ymax, xmax] of the box
+        corresponding to mask i. Note that the box corners are in
+        normalized coordinates.
+      detection_masks is a tensor of size
+        [num_masks, mask_height, mask_width].
+      image_shape is a tensor of shape [2]
+      pad_shape is a tensor of shape [2] --- this is assumed to be greater
+        than or equal to image_shape along both dimensions and represents a
+        shape to-be-padded-to.
+
+  Returns:
+  """
+
+  detection_boxes, detection_masks, image_shape, pad_shape = arg_tuple
+
   detection_masks_reframed = ops.reframe_box_masks_to_image_masks(
       detection_masks, detection_boxes, image_shape[0], image_shape[1])
-  return tf.cast(tf.greater(detection_masks_reframed, 0.5), tf.uint8)
+
+  pad_instance_dim = tf.zeros([3, 1], dtype=tf.int32)
+  pad_hw_dim = tf.concat([tf.zeros([1], dtype=tf.int32),
+                          pad_shape - image_shape], axis=0)
+  pad_hw_dim = tf.expand_dims(pad_hw_dim, 1)
+  paddings = tf.concat([pad_instance_dim, pad_hw_dim], axis=1)
+  detection_masks_reframed = tf.pad(detection_masks_reframed, paddings)
+
+  # If the masks are currently float, binarize them. Otherwise keep them as
+  # integers, since they have already been thresholded.
+  if detection_masks_reframed.dtype == tf.float32:
+    detection_masks_reframed = tf.greater(detection_masks_reframed, 0.5)
+  return tf.cast(detection_masks_reframed, tf.uint8)
+
+
+def resize_detection_masks(detection_boxes, detection_masks,
+                           original_image_spatial_shapes):
+  """Resizes per-box detection masks to be relative to the entire image.
+
+  Note that this function only works when the spatial size of all images in
+  the batch is the same. If not, this function should be used with batch_size=1.
+
+  Args:
+    detection_boxes: A [batch_size, num_instances, 4] float tensor containing
+      bounding boxes.
+    detection_masks: A [batch_size, num_instances, height, width] float tensor
+      containing binary instance masks per box.
+    original_image_spatial_shapes: a [batch_size, 3] shaped int tensor
+      holding the spatial dimensions of each image in the batch.
+  Returns:
+    masks: Masks resized to the spatial extents given by
+      (original_image_spatial_shapes[0, 0], original_image_spatial_shapes[0, 1])
+  """
+  # modify original image spatial shapes to be max along each dim
+  # in evaluator, should have access to original_image_spatial_shape field
+  # in add_Eval_Dict
+  max_spatial_shape = tf.reduce_max(
+      original_image_spatial_shapes, axis=0, keep_dims=True)
+  tiled_max_spatial_shape = tf.tile(
+      max_spatial_shape,
+      multiples=[tf.shape(original_image_spatial_shapes)[0], 1])
+  return shape_utils.static_or_dynamic_map_fn(
+      _resize_detection_masks,
+      elems=[detection_boxes,
+             detection_masks,
+             original_image_spatial_shapes,
+             tiled_max_spatial_shape],
+      dtype=tf.uint8)
 
 
 def _resize_groundtruth_masks(args):
-  mask, image_shape = args
+  """Resizes groundtruth masks to the original image size."""
+  mask, true_image_shape, original_image_shape, pad_shape = args
+  true_height = true_image_shape[0]
+  true_width = true_image_shape[1]
+  mask = mask[:, :true_height, :true_width]
   mask = tf.expand_dims(mask, 3)
   mask = tf.image.resize_images(
       mask,
-      image_shape,
+      original_image_shape,
       method=tf.image.ResizeMethod.NEAREST_NEIGHBOR,
       align_corners=True)
-  return tf.cast(tf.squeeze(mask, 3), tf.uint8)
+
+  paddings = tf.concat(
+      [tf.zeros([3, 1], dtype=tf.int32),
+       tf.expand_dims(
+           tf.concat([tf.zeros([1], dtype=tf.int32),
+                      pad_shape-original_image_shape], axis=0),
+           1)], axis=1)
+  mask = tf.pad(tf.squeeze(mask, 3), paddings)
+  return tf.cast(mask, tf.uint8)
+
+
+def _resize_surface_coordinate_masks(args):
+  detection_boxes, surface_coords, image_shape = args
+  surface_coords_v, surface_coords_u = tf.unstack(surface_coords, axis=-1)
+  surface_coords_v_reframed = ops.reframe_box_masks_to_image_masks(
+      surface_coords_v, detection_boxes, image_shape[0], image_shape[1])
+  surface_coords_u_reframed = ops.reframe_box_masks_to_image_masks(
+      surface_coords_u, detection_boxes, image_shape[0], image_shape[1])
+  return tf.stack([surface_coords_v_reframed, surface_coords_u_reframed],
+                  axis=-1)
 
 
 def _scale_keypoint_to_absolute(args):
@@ -533,6 +691,8 @@ def result_dict_for_single_example(image,
       'groundtruth_group_of': [num_boxes] int64 tensor. (Optional)
       'groundtruth_instance_masks': 3D int64 tensor of instance masks
         (Optional).
+      'groundtruth_keypoints': [num_boxes, num_keypoints, 2] float32 tensor with
+        keypoints (Optional).
     class_agnostic: Boolean indicating whether the detections are class-agnostic
       (i.e. binary). Default False.
     scale_to_absolute: Boolean indicating whether boxes and keypoints should be
@@ -562,7 +722,8 @@ def result_dict_for_single_example(image,
     'groundtruth_group_of': [num_boxes] int64 tensor. (Optional)
     'groundtruth_instance_masks': 3D int64 tensor of instance masks
       (Optional).
-
+    'groundtruth_keypoints': [num_boxes, num_keypoints, 2] float32 tensor with
+      keypoints (Optional).
   """
 
   if groundtruth:
@@ -588,8 +749,7 @@ def result_dict_for_single_example(image,
   exclude_keys = [
       fields.InputDataFields.original_image,
       fields.DetectionResultFields.num_detections,
-      fields.InputDataFields.num_groundtruth_boxes,
-      fields.InputDataFields.original_image_spatial_shape
+      fields.InputDataFields.num_groundtruth_boxes
   ]
 
   output_dict = {
@@ -611,16 +771,22 @@ def result_dict_for_batched_example(images,
                                     class_agnostic=False,
                                     scale_to_absolute=False,
                                     original_image_spatial_shapes=None,
-                                    max_gt_boxes=None):
+                                    true_image_shapes=None,
+                                    max_gt_boxes=None,
+                                    label_id_offset=1):
   """Merges all detection and groundtruth information for a single example.
 
   Note that evaluation tools require classes that are 1-indexed, and so this
   function performs the offset. If `class_agnostic` is True, all output classes
   have label 1.
+  The groundtruth coordinates of boxes/keypoints in 'groundtruth' dictionary are
+  normalized relative to the (potentially padded) input image, while the
+  coordinates in 'detection' dictionary are normalized relative to the true
+  image shape.
 
   Args:
     images: A single 4D uint8 image tensor of shape [batch_size, H, W, C].
-    keys: A [batch_size] string tensor with image identifier.
+    keys: A [batch_size] string/int tensor with image identifier.
     detections: A dictionary of detections, returned from
       DetectionModel.postprocess().
     groundtruth: (Optional) Dictionary of groundtruth items, with fields:
@@ -638,6 +804,18 @@ def result_dict_for_batched_example(images,
         tensor. (Optional)
       'groundtruth_instance_masks': 4D int64 tensor of instance
         masks (Optional).
+      'groundtruth_keypoints': [batch_size, max_number_of_boxes, num_keypoints,
+        2] float32 tensor with keypoints (Optional).
+      'groundtruth_keypoint_visibilities': [batch_size, max_number_of_boxes,
+        num_keypoints] bool tensor with keypoint visibilities (Optional).
+      'groundtruth_labeled_classes': [batch_size, num_classes] int64
+        tensor of 1-indexed classes. (Optional)
+      'groundtruth_dp_num_points': [batch_size, max_number_of_boxes] int32
+        tensor. (Optional)
+      'groundtruth_dp_part_ids': [batch_size, max_number_of_boxes,
+        max_sampled_points] int32 tensor. (Optional)
+      'groundtruth_dp_surface_coords_list': [batch_size, max_number_of_boxes,
+        max_sampled_points, 4] float32 tensor. (Optional)
     class_agnostic: Boolean indicating whether the detections are class-agnostic
       (i.e. binary). Default False.
     scale_to_absolute: Boolean indicating whether boxes and keypoints should be
@@ -646,14 +824,19 @@ def result_dict_for_batched_example(images,
       coordinates. Default False.
     original_image_spatial_shapes: A 2D int32 tensor of shape [batch_size, 2]
       used to resize the image. When set to None, the image size is retained.
+    true_image_shapes: A 2D int32 tensor of shape [batch_size, 3]
+      containing the size of the unpadded original_image.
     max_gt_boxes: [batch_size] tensor representing the maximum number of
       groundtruth boxes to pad.
+    label_id_offset: offset for class ids.
 
   Returns:
     A dictionary with:
     'original_image': A [batch_size, H, W, C] uint8 image tensor.
     'original_image_spatial_shape': A [batch_size, 2] tensor containing the
       original image sizes.
+    'true_image_shape': A [batch_size, 3] tensor containing the size of
+      the unpadded original_image.
     'key': A [batch_size] string tensor with image identifier.
     'detection_boxes': [batch_size, max_detections, 4] float32 tensor of boxes,
       in normalized or absolute coordinates, depending on the value of
@@ -661,8 +844,16 @@ def result_dict_for_batched_example(images,
     'detection_scores': [batch_size, max_detections] float32 tensor of scores.
     'detection_classes': [batch_size, max_detections] int64 tensor of 1-indexed
       classes.
-    'detection_masks': [batch_size, max_detections, H, W] float32 tensor of
-      binarized masks, reframed to full image masks.
+    'detection_masks': [batch_size, max_detections, H, W] uint8 tensor of
+      instance masks, reframed to full image masks. Note that these may be
+      binarized (e.g. {0, 1}), or may contain 1-indexed part labels. (Optional)
+    'detection_keypoints': [batch_size, max_detections, num_keypoints, 2]
+      float32 tensor containing keypoint coordinates. (Optional)
+    'detection_keypoint_scores': [batch_size, max_detections, num_keypoints]
+      float32 tensor containing keypoint scores. (Optional)
+    'detection_surface_coords': [batch_size, max_detection, H, W, 2] float32
+      tensor with normalized surface coordinates (e.g. DensePose UV
+      coordinates). (Optional)
     'num_detections': [batch_size] int64 tensor containing number of valid
       detections.
     'groundtruth_boxes': [batch_size, num_boxes, 4] float32 tensor of boxes, in
@@ -677,15 +868,21 @@ def result_dict_for_batched_example(images,
     'groundtruth_group_of': [batch_size, num_boxes] int64 tensor. (Optional)
     'groundtruth_instance_masks': 4D int64 tensor of instance masks
       (Optional).
+    'groundtruth_keypoints': [batch_size, num_boxes, num_keypoints, 2] float32
+      tensor with keypoints (Optional).
+    'groundtruth_keypoint_visibilities': [batch_size, num_boxes, num_keypoints]
+      bool tensor with keypoint visibilities (Optional).
+    'groundtruth_labeled_classes': [batch_size, num_classes]  int64 tensor
+      of 1-indexed classes. (Optional)
     'num_groundtruth_boxes': [batch_size] tensor containing the maximum number
       of groundtruth boxes per image.
 
   Raises:
-    ValueError: if original_image_spatial_shape is not 1D int32 tensor of shape
-    [2].
+    ValueError: if original_image_spatial_shape is not 2D int32 tensor of shape
+      [2].
+    ValueError: if true_image_shapes is not 2D int32 tensor of shape
+      [3].
   """
-  label_id_offset = 1  # Applying label id offset (b/63711816)
-
   input_data_fields = fields.InputDataFields
   if original_image_spatial_shapes is None:
     original_image_spatial_shapes = tf.tile(
@@ -698,17 +895,32 @@ def result_dict_for_batched_example(images,
           '`original_image_spatial_shape` should be a 2D tensor of shape '
           '[batch_size, 2].')
 
+  if true_image_shapes is None:
+    true_image_shapes = tf.tile(
+        tf.expand_dims(tf.shape(images)[1:4], axis=0),
+        multiples=[tf.shape(images)[0], 1])
+  else:
+    if (len(true_image_shapes.shape) != 2
+        and true_image_shapes.shape[1] != 3):
+      raise ValueError('`true_image_shapes` should be a 2D tensor of '
+                       'shape [batch_size, 3].')
+
   output_dict = {
-      input_data_fields.original_image: images,
-      input_data_fields.key: keys,
+      input_data_fields.original_image:
+          images,
+      input_data_fields.key:
+          keys,
       input_data_fields.original_image_spatial_shape: (
-          original_image_spatial_shapes)
+          original_image_spatial_shapes),
+      input_data_fields.true_image_shape:
+          true_image_shapes
   }
 
   detection_fields = fields.DetectionResultFields
   detection_boxes = detections[detection_fields.detection_boxes]
   detection_scores = detections[detection_fields.detection_scores]
-  num_detections = tf.to_int32(detections[detection_fields.num_detections])
+  num_detections = tf.cast(detections[detection_fields.num_detections],
+                           dtype=tf.int32)
 
   if class_agnostic:
     detection_classes = tf.ones_like(detection_scores, dtype=tf.int64)
@@ -731,14 +943,18 @@ def result_dict_for_batched_example(images,
 
   if detection_fields.detection_masks in detections:
     detection_masks = detections[detection_fields.detection_masks]
-    # TODO(rathodv): This should be done in model's postprocess
-    # function ideally.
-    output_dict[detection_fields.detection_masks] = (
-        shape_utils.static_or_dynamic_map_fn(
-            _resize_detection_masks,
-            elems=[detection_boxes, detection_masks,
-                   original_image_spatial_shapes],
-            dtype=tf.uint8))
+    output_dict[detection_fields.detection_masks] = resize_detection_masks(
+        detection_boxes, detection_masks, original_image_spatial_shapes)
+
+    if detection_fields.detection_surface_coords in detections:
+      detection_surface_coords = detections[
+          detection_fields.detection_surface_coords]
+      output_dict[detection_fields.detection_surface_coords] = (
+          shape_utils.static_or_dynamic_map_fn(
+              _resize_surface_coordinate_masks,
+              elems=[detection_boxes, detection_surface_coords,
+                     original_image_spatial_shapes],
+              dtype=tf.float32))
 
   if detection_fields.detection_keypoints in detections:
     detection_keypoints = detections[detection_fields.detection_keypoints]
@@ -749,6 +965,12 @@ def result_dict_for_batched_example(images,
               _scale_keypoint_to_absolute,
               elems=[detection_keypoints, original_image_spatial_shapes],
               dtype=tf.float32))
+    if detection_fields.detection_keypoint_scores in detections:
+      output_dict[detection_fields.detection_keypoint_scores] = detections[
+          detection_fields.detection_keypoint_scores]
+    else:
+      output_dict[detection_fields.detection_keypoint_scores] = tf.ones_like(
+          detections[detection_fields.detection_keypoints][:, :, :, 0])
 
   if groundtruth:
     if max_gt_boxes is None:
@@ -760,20 +982,77 @@ def result_dict_for_batched_example(images,
 
     if input_data_fields.groundtruth_instance_masks in groundtruth:
       masks = groundtruth[input_data_fields.groundtruth_instance_masks]
+      max_spatial_shape = tf.reduce_max(
+          original_image_spatial_shapes, axis=0, keep_dims=True)
+      tiled_max_spatial_shape = tf.tile(
+          max_spatial_shape,
+          multiples=[tf.shape(original_image_spatial_shapes)[0], 1])
       groundtruth[input_data_fields.groundtruth_instance_masks] = (
           shape_utils.static_or_dynamic_map_fn(
               _resize_groundtruth_masks,
-              elems=[masks, original_image_spatial_shapes],
+              elems=[masks, true_image_shapes,
+                     original_image_spatial_shapes,
+                     tiled_max_spatial_shape],
               dtype=tf.uint8))
 
     output_dict.update(groundtruth)
+
+    image_shape = tf.cast(tf.shape(images), tf.float32)
+    image_height, image_width = image_shape[1], image_shape[2]
+
+    def _scale_box_to_normalized_true_image(args):
+      """Scale the box coordinates to be relative to the true image shape."""
+      boxes, true_image_shape = args
+      true_image_shape = tf.cast(true_image_shape, tf.float32)
+      true_height, true_width = true_image_shape[0], true_image_shape[1]
+      normalized_window = tf.stack([0.0, 0.0, true_height / image_height,
+                                    true_width / image_width])
+      return box_list_ops.change_coordinate_frame(
+          box_list.BoxList(boxes), normalized_window).get()
+
+    groundtruth_boxes = groundtruth[input_data_fields.groundtruth_boxes]
+    groundtruth_boxes = shape_utils.static_or_dynamic_map_fn(
+        _scale_box_to_normalized_true_image,
+        elems=[groundtruth_boxes, true_image_shapes], dtype=tf.float32)
+    output_dict[input_data_fields.groundtruth_boxes] = groundtruth_boxes
+
+    if input_data_fields.groundtruth_keypoints in groundtruth:
+      # If groundtruth_keypoints is in the groundtruth dictionary. Update the
+      # coordinates to conform with the true image shape.
+      def _scale_keypoints_to_normalized_true_image(args):
+        """Scale the box coordinates to be relative to the true image shape."""
+        keypoints, true_image_shape = args
+        true_image_shape = tf.cast(true_image_shape, tf.float32)
+        true_height, true_width = true_image_shape[0], true_image_shape[1]
+        normalized_window = tf.stack(
+            [0.0, 0.0, true_height / image_height, true_width / image_width])
+        return keypoint_ops.change_coordinate_frame(keypoints,
+                                                    normalized_window)
+
+      groundtruth_keypoints = groundtruth[
+          input_data_fields.groundtruth_keypoints]
+      groundtruth_keypoints = shape_utils.static_or_dynamic_map_fn(
+          _scale_keypoints_to_normalized_true_image,
+          elems=[groundtruth_keypoints, true_image_shapes],
+          dtype=tf.float32)
+      output_dict[
+          input_data_fields.groundtruth_keypoints] = groundtruth_keypoints
+
     if scale_to_absolute:
-      groundtruth_boxes = groundtruth[input_data_fields.groundtruth_boxes]
+      groundtruth_boxes = output_dict[input_data_fields.groundtruth_boxes]
       output_dict[input_data_fields.groundtruth_boxes] = (
           shape_utils.static_or_dynamic_map_fn(
               _scale_box_to_absolute,
               elems=[groundtruth_boxes, original_image_spatial_shapes],
               dtype=tf.float32))
+      if input_data_fields.groundtruth_keypoints in groundtruth:
+        groundtruth_keypoints = output_dict[
+            input_data_fields.groundtruth_keypoints]
+        output_dict[input_data_fields.groundtruth_keypoints] = (
+            shape_utils.static_or_dynamic_map_fn(
+                _scale_keypoint_to_absolute,
+                elems=[groundtruth_keypoints, original_image_spatial_shapes],
+                dtype=tf.float32))
 
     # For class-agnostic models, groundtruth classes all become 1.
     if class_agnostic:
@@ -794,6 +1073,8 @@ def get_evaluators(eval_config, categories, evaluator_options=None):
     categories: A list of dicts, each of which has the following keys -
         'id': (required) an integer id uniquely identifying this category.
         'name': (required) string representing category name e.g., 'cat', 'dog'.
+        'keypoints': (optional) dict mapping this category's keypoints to unique
+          ids.
     evaluator_options: A dictionary of metric names (see
       EVAL_METRICS_CLASS_DICT) to `DetectionEvaluator` initialization
       keyword arguments. For example:
@@ -820,6 +1101,32 @@ def get_evaluators(eval_config, categories, evaluator_options=None):
     evaluators_list.append(EVAL_METRICS_CLASS_DICT[eval_metric_fn_key](
         categories,
         **kwargs_dict))
+
+  if isinstance(eval_config, eval_pb2.EvalConfig):
+    parameterized_metrics = eval_config.parameterized_metric
+    for parameterized_metric in parameterized_metrics:
+      assert parameterized_metric.HasField('parameterized_metric')
+      if parameterized_metric.WhichOneof(
+          'parameterized_metric') == EVAL_KEYPOINT_METRIC:
+        keypoint_metrics = parameterized_metric.coco_keypoint_metrics
+        # Create category to keypoints mapping dict.
+        category_keypoints = {}
+        class_label = keypoint_metrics.class_label
+        category = None
+        for cat in categories:
+          if cat['name'] == class_label:
+            category = cat
+            break
+        if not category:
+          continue
+        keypoints_for_this_class = category['keypoints']
+        category_keypoints = [{
+            'id': keypoints_for_this_class[kp_name], 'name': kp_name
+        } for kp_name in keypoints_for_this_class]
+        # Create keypoint evaluator for this category.
+        evaluators_list.append(EVAL_METRICS_CLASS_DICT[EVAL_KEYPOINT_METRIC](
+            category['id'], category_keypoints, class_label,
+            keypoint_metrics.keypoint_label_to_sigmas))
   return evaluators_list
 
 
@@ -866,9 +1173,47 @@ def evaluator_options_from_eval_config(eval_config):
   eval_metric_fn_keys = eval_config.metrics_set
   evaluator_options = {}
   for eval_metric_fn_key in eval_metric_fn_keys:
-    if eval_metric_fn_key in ('coco_detection_metrics', 'coco_mask_metrics'):
+    if eval_metric_fn_key in (
+        'coco_detection_metrics', 'coco_mask_metrics', 'lvis_mask_metrics'):
       evaluator_options[eval_metric_fn_key] = {
           'include_metrics_per_category': (
               eval_config.include_metrics_per_category)
       }
+
+      if (hasattr(eval_config, 'all_metrics_per_category') and
+          eval_config.all_metrics_per_category):
+        evaluator_options[eval_metric_fn_key].update({
+            'all_metrics_per_category': eval_config.all_metrics_per_category
+        })
+      # For coco detection eval, if the eval_config proto contains the
+      # "skip_predictions_for_unlabeled_class" field, include this field in
+      # evaluator_options.
+      if eval_metric_fn_key == 'coco_detection_metrics' and hasattr(
+          eval_config, 'skip_predictions_for_unlabeled_class'):
+        evaluator_options[eval_metric_fn_key].update({
+            'skip_predictions_for_unlabeled_class':
+                (eval_config.skip_predictions_for_unlabeled_class)
+        })
+      for super_category in eval_config.super_categories:
+        if 'super_categories' not in evaluator_options[eval_metric_fn_key]:
+          evaluator_options[eval_metric_fn_key]['super_categories'] = {}
+        key = super_category
+        value = eval_config.super_categories[key].split(',')
+        evaluator_options[eval_metric_fn_key]['super_categories'][key] = value
+      if eval_metric_fn_key == 'lvis_mask_metrics' and hasattr(
+          eval_config, 'export_path'):
+        evaluator_options[eval_metric_fn_key].update({
+            'export_path': eval_config.export_path
+        })
+
+    elif eval_metric_fn_key == 'precision_at_recall_detection_metrics':
+      evaluator_options[eval_metric_fn_key] = {
+          'recall_lower_bound': (eval_config.recall_lower_bound),
+          'recall_upper_bound': (eval_config.recall_upper_bound)
+      }
   return evaluator_options
+
+
+def has_densepose(eval_dict):
+  return (fields.DetectionResultFields.detection_masks in eval_dict and
+          fields.DetectionResultFields.detection_surface_coords in eval_dict)

@@ -22,10 +22,8 @@ import contextlib
 import copy
 import os
 
-import tensorflow as tf
-
-
-slim = tf.contrib.slim
+import tensorflow.compat.v1 as tf
+import tf_slim as slim
 
 
 @slim.add_arg_scope
@@ -54,8 +52,10 @@ def _fixed_padding(inputs, kernel_size, rate=1):
   pad_total = [kernel_size_effective[0] - 1, kernel_size_effective[1] - 1]
   pad_beg = [pad_total[0] // 2, pad_total[1] // 2]
   pad_end = [pad_total[0] - pad_beg[0], pad_total[1] - pad_beg[1]]
-  padded_inputs = tf.pad(inputs, [[0, 0], [pad_beg[0], pad_end[0]],
-                                  [pad_beg[1], pad_end[1]], [0, 0]])
+  padded_inputs = tf.pad(
+      tensor=inputs,
+      paddings=[[0, 0], [pad_beg[0], pad_end[0]], [pad_beg[1], pad_end[1]],
+                [0, 0]])
   return padded_inputs
 
 
@@ -66,7 +66,7 @@ def _make_divisible(v, divisor, min_value=None):
   # Make sure that round down does not go down by more than 10%.
   if new_v < 0.9 * v:
     new_v += divisor
-  return new_v
+  return int(new_v)
 
 
 @contextlib.contextmanager
@@ -109,8 +109,8 @@ def depth_multiplier(output_params,
 _Op = collections.namedtuple('Op', ['op', 'params', 'multiplier_func'])
 
 
-def op(opfunc, **params):
-  multiplier = params.pop('multiplier_transorm', depth_multiplier)
+def op(opfunc, multiplier_func=depth_multiplier, **params):
+  multiplier = params.pop('multiplier_transform', multiplier_func)
   return _Op(opfunc, params=params, multiplier_func=multiplier)
 
 
@@ -127,7 +127,7 @@ class NoOpScope(object):
 def safe_arg_scope(funcs, **kwargs):
   """Returns `slim.arg_scope` with all None arguments removed.
 
-  Arguments:
+  Args:
     funcs: Functions to pass to `arg_scope`.
     **kwargs: Arguments to pass to `arg_scope`.
 
@@ -226,6 +226,7 @@ def mobilenet_base(  # pylint: disable=invalid-name
   # since it is also set by mobilenet_scope
   # c) set all defaults
   # d) set all extra overrides.
+  # pylint: disable=g-backslash-continuation
   with _scope_all(scope, default_scope='Mobilenet'), \
       safe_arg_scope([slim.batch_norm], is_training=is_training), \
       _set_arg_scope_defaults(conv_defs_defaults), \
@@ -262,9 +263,16 @@ def mobilenet_base(  # pylint: disable=invalid-name
         current_stride *= stride
       # Update params.
       params['stride'] = layer_stride
-      # Only insert rate to params if rate > 1.
+      # Only insert rate to params if rate > 1 and kernel size is not [1, 1].
       if layer_rate > 1:
-        params['rate'] = layer_rate
+        if tuple(params.get('kernel_size', [])) != (1, 1):
+          # We will apply atrous rate in the following cases:
+          # 1) When kernel_size is not in params, the operation then uses
+          #   default kernel size 3x3.
+          # 2) When kernel_size is in params, and if the kernel_size is not
+          #   equal to (1, 1) (there is no need to apply atrous convolution to
+          #   any 1x1 convolution).
+          params['rate'] = layer_rate
       # Set padding
       if use_explicit_padding:
         if 'kernel_size' in params:
@@ -308,6 +316,7 @@ def mobilenet(inputs,
               reuse=None,
               scope='Mobilenet',
               base_only=False,
+              use_reduce_mean_for_pooling=False,
               **mobilenet_args):
   """Mobilenet model for classification, supports both V1 and V2.
 
@@ -327,6 +336,8 @@ def mobilenet(inputs,
     scope: Optional variable_scope.
     base_only: if True will only create the base of the network (no pooling
     and no logits).
+    use_reduce_mean_for_pooling: if True use the reduce_mean for pooling. If
+    True use the global_pool function that provides some optimization.
     **mobilenet_args: passed to mobilenet_base verbatim.
       - conv_defs: list of conv defs
       - multiplier: Float multiplier for the depth (number of channels)
@@ -362,7 +373,7 @@ def mobilenet(inputs,
     net = tf.identity(net, name='embedding')
 
     with tf.variable_scope('Logits'):
-      net = global_pool(net)
+      net = global_pool(net, use_reduce_mean_for_pooling)
       end_points['global_pool'] = net
       if not num_classes:
         return net, end_points
@@ -386,7 +397,9 @@ def mobilenet(inputs,
   return logits, end_points
 
 
-def global_pool(input_tensor, pool_op=tf.nn.avg_pool):
+def global_pool(input_tensor,
+                use_reduce_mean_for_pooling=False,
+                pool_op=tf.nn.avg_pool2d):
   """Applies avg pool to produce 1x1 output.
 
   NOTE: This function is funcitonally equivalenet to reduce_mean, but it has
@@ -394,22 +407,29 @@ def global_pool(input_tensor, pool_op=tf.nn.avg_pool):
 
   Args:
     input_tensor: input tensor
+    use_reduce_mean_for_pooling: if True use reduce_mean for pooling
     pool_op: pooling op (avg pool is default)
   Returns:
     a tensor batch_size x 1 x 1 x depth.
   """
-  shape = input_tensor.get_shape().as_list()
-  if shape[1] is None or shape[2] is None:
-    kernel_size = tf.convert_to_tensor(
-        [1, tf.shape(input_tensor)[1],
-         tf.shape(input_tensor)[2], 1])
+  if use_reduce_mean_for_pooling:
+    return tf.reduce_mean(
+        input_tensor, [1, 2], keepdims=True, name='ReduceMean')
   else:
-    kernel_size = [1, shape[1], shape[2], 1]
-  output = pool_op(
-      input_tensor, ksize=kernel_size, strides=[1, 1, 1, 1], padding='VALID')
-  # Recover output shape, for unknown shape.
-  output.set_shape([None, 1, 1, None])
-  return output
+    shape = input_tensor.get_shape().as_list()
+    if shape[1] is None or shape[2] is None:
+      kernel_size = tf.convert_to_tensor(value=[
+          1,
+          tf.shape(input=input_tensor)[1],
+          tf.shape(input=input_tensor)[2], 1
+      ])
+    else:
+      kernel_size = [1, shape[1], shape[2], 1]
+    output = pool_op(
+        input_tensor, ksize=kernel_size, strides=[1, 1, 1, 1], padding='VALID')
+    # Recover output shape, for unknown shape.
+    output.set_shape([None, 1, 1, None])
+    return output
 
 
 def training_scope(is_training=True,
@@ -420,7 +440,7 @@ def training_scope(is_training=True,
   """Defines Mobilenet training scope.
 
   Usage:
-     with tf.contrib.slim.arg_scope(mobilenet.training_scope()):
+     with slim.arg_scope(mobilenet.training_scope()):
        logits, endpoints = mobilenet_v2.mobilenet(input_tensor)
 
      # the network created will be trainble with dropout/batch norm
@@ -450,7 +470,8 @@ def training_scope(is_training=True,
   if stddev < 0:
     weight_intitializer = slim.initializers.xavier_initializer()
   else:
-    weight_intitializer = tf.truncated_normal_initializer(stddev=stddev)
+    weight_intitializer = tf.truncated_normal_initializer(
+        stddev=stddev)
 
   # Set weight_decay for weights in Conv and FC layers.
   with slim.arg_scope(

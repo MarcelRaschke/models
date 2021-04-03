@@ -20,8 +20,8 @@ DetectionModel.
 
 """
 
-import logging
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+from tensorflow.contrib import tfprof as contrib_tfprof
 from lstm_object_detection.metrics import coco_evaluation_all_frames
 from object_detection import eval_util
 from object_detection.core import prefetcher
@@ -106,13 +106,13 @@ def _extract_prediction_tensors(model,
   detections = _create_detection_op(model, input_dict, batch)
 
   # Print out anaylsis of the model.
-  tf.contrib.tfprof.model_analyzer.print_model_analysis(
+  contrib_tfprof.model_analyzer.print_model_analysis(
       tf.get_default_graph(),
-      tfprof_options=tf.contrib.tfprof.model_analyzer.
-      TRAINABLE_VARS_PARAMS_STAT_OPTIONS)
-  tf.contrib.tfprof.model_analyzer.print_model_analysis(
+      tfprof_options=contrib_tfprof.model_analyzer
+      .TRAINABLE_VARS_PARAMS_STAT_OPTIONS)
+  contrib_tfprof.model_analyzer.print_model_analysis(
       tf.get_default_graph(),
-      tfprof_options=tf.contrib.tfprof.model_analyzer.FLOAT_OPS_OPTIONS)
+      tfprof_options=contrib_tfprof.model_analyzer.FLOAT_OPS_OPTIONS)
 
   num_frames = len(input_dict[fields.InputDataFields.image])
   ret = []
@@ -215,7 +215,7 @@ def evaluate(create_input_dict_fn,
   model = create_model_fn()
 
   if eval_config.ignore_groundtruth and not eval_config.export_path:
-    logging.fatal('If ignore_groundtruth=True then an export_path is '
+    tf.logging.fatal('If ignore_groundtruth=True then an export_path is '
                   'required. Aborting!!!')
 
   tensor_dicts = _extract_prediction_tensors(
@@ -252,14 +252,14 @@ def evaluate(create_input_dict_fn,
         third_party eval_util.py.
     """
     if batch_index % 10 == 0:
-      logging.info('Running eval ops batch %d', batch_index)
+      tf.logging.info('Running eval ops batch %d', batch_index)
     if not losses_dict:
       losses_dict = {}
     try:
       result_dicts, result_losses_dict = sess.run([tensor_dicts, losses_dict])
       counters['success'] += 1
     except tf.errors.InvalidArgumentError:
-      logging.info('Skipping image')
+      tf.logging.info('Skipping image')
       counters['skipped'] += 1
       return {}
     num_images = len(tensor_dicts)

@@ -1,66 +1,175 @@
+![Logo](https://storage.googleapis.com/model_garden_artifacts/TF_Model_Garden.png)
+
 # TensorFlow Official Models
 
-The TensorFlow official models are a collection of example models that use TensorFlow's high-level APIs. They are intended to be well-maintained, tested, and kept up to date with the latest TensorFlow API. They should also be reasonably optimized for fast performance while still being easy to read.
+The TensorFlow official models are a collection of models
+that use TensorFlow’s high-level APIs.
+They are intended to be well-maintained, tested, and kept up to date
+with the latest TensorFlow API.
 
-These models are used as end-to-end tests, ensuring that the models run with the same speed and performance with each new TensorFlow build.
+They should also be reasonably optimized for fast performance while still
+being easy to read.
+These models are used as end-to-end tests, ensuring that the models run
+with the same or improved speed and performance with each new TensorFlow build.
 
-## Tensorflow releases
-The master branch of the models are **in development**, and they target the [nightly binaries](https://github.com/tensorflow/tensorflow#installation) built from the [master branch of TensorFlow](https://github.com/tensorflow/tensorflow/tree/master). We aim to keep them backwards compatible with the latest release when possible (currently TensorFlow 1.5), but we cannot always guarantee compatibility.
+## More models to come!
 
-**Stable versions** of the official models targeting releases of TensorFlow are available as tagged branches or [downloadable releases](https://github.com/tensorflow/models/releases). Model repository version numbers match the target TensorFlow release, such that [branch r1.4.0](https://github.com/tensorflow/models/tree/r1.4.0) and [release v1.4.0](https://github.com/tensorflow/models/releases/tag/v1.4.0) are compatible with [TensorFlow v1.4.0](https://github.com/tensorflow/tensorflow/releases/tag/v1.4.0).
+The team is actively developing new models.
+In the near future, we will add:
 
-If you are on a version of TensorFlow earlier than 1.4, please [update your installation](https://www.tensorflow.org/install/).
+* State-of-the-art language understanding models.
+* State-of-the-art image classification models.
+* State-of-the-art object detection and instance segmentation models.
 
-## Requirements
-Please follow the below steps before running models in this repo:
+## Table of Contents
 
-1. Add the top-level ***/models*** folder to the Python path with the command:
-   ```
-   export PYTHONPATH="$PYTHONPATH:/path/to/models"
-   ```
-2. Install dependencies:
-   ```
-   pip3 install --user -r official/requirements.txt
-   ```
-   or
-   ```
-   pip install --user -r official/requirements.txt
-   ```
+- [Models and Implementations](#models-and-implementations)
+  * [Computer Vision](#computer-vision)
+    + [Image Classification](#image-classification)
+    + [Object Detection and Segmentation](#object-detection-and-segmentation)
+  * [Natural Language Processing](#natural-language-processing)
+  * [Recommendation](#recommendation)
+- [How to get started with the official models](#how-to-get-started-with-the-official-models)
 
+## Models and Implementations
 
-To make Official Models easier to use, we are planning to create a pip installable Official Models package. This is being tracked in [#917](https://github.com/tensorflow/models/issues/917).
+### Computer Vision
 
+#### Image Classification
 
-## Available models
+| Model | Reference (Paper) |
+|-------|-------------------|
+| [MNIST](vision/image_classification) | A basic model to classify digits from the [MNIST dataset](http://yann.lecun.com/exdb/mnist/) |
+| [ResNet](vision/image_classification) | [Deep Residual Learning for Image Recognition](https://arxiv.org/abs/1512.03385) |
+| [EfficientNet](vision/image_classification) | [EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks](https://arxiv.org/abs/1905.11946) |
 
-**NOTE:** Please make sure to follow the steps in the [Requirements](#requirements) section.
+#### Object Detection and Segmentation
 
-* [boosted_trees](boosted_trees): A Gradient Boosted Trees model to classify higgs boson process from HIGGS Data Set.
-* [mnist](mnist): A basic model to classify digits from the MNIST dataset.
-* [resnet](resnet): A deep residual network that can be used to classify both CIFAR-10 and ImageNet's dataset of 1000 classes.
-* [transformer](transformer): A transformer model to translate the WMT English to German dataset.
-* [wide_deep](wide_deep): A model that combines a wide model and deep network to classify census income data.
-* More models to come!
+| Model | Reference (Paper) |
+|-------|-------------------|
+| [RetinaNet](vision/detection) | [Focal Loss for Dense Object Detection](https://arxiv.org/abs/1708.02002) |
+| [Mask R-CNN](vision/detection) | [Mask R-CNN](https://arxiv.org/abs/1703.06870) |
+| [ShapeMask](vision/detection) | [ShapeMask: Learning to Segment Novel Objects by Refining Shape Priors](https://arxiv.org/abs/1904.03239) |
+| [SpineNet](vision/detection) | [SpineNet: Learning Scale-Permuted Backbone for Recognition and Localization](https://arxiv.org/abs/1912.05027) |
 
-If you would like to make any fixes or improvements to the models, please [submit a pull request](https://github.com/tensorflow/models/compare).
+### Natural Language Processing
 
-## New Models
+| Model | Reference (Paper) |
+|-------|-------------------|
+| [ALBERT (A Lite BERT)](nlp/albert) | [ALBERT: A Lite BERT for Self-supervised Learning of Language Representations](https://arxiv.org/abs/1909.11942) |
+| [BERT (Bidirectional Encoder Representations from Transformers)](nlp/bert) | [BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/abs/1810.04805) |
+| [NHNet (News Headline generation model)](nlp/nhnet) | [Generating Representative Headlines for News Stories](https://arxiv.org/abs/2001.09386) |
+| [Transformer](nlp/transformer) | [Attention Is All You Need](https://arxiv.org/abs/1706.03762) |
+| [XLNet](nlp/xlnet) | [XLNet: Generalized Autoregressive Pretraining for Language Understanding](https://arxiv.org/abs/1906.08237) |
 
-The team is actively working to add new models to the repository. Every model should follow the following guidelines, to uphold the
-our objectives of readable, usable, and maintainable code.
+### Recommendation
 
-**General guidelines**
-* Code should be well documented and tested.
-* Runnable from a blank environment with relative ease.
-* Trainable on: single GPU/CPU (baseline), multiple GPUs, TPU
-* Compatible with Python 2 and 3 (using [six](https://pythonhosted.org/six/) when necessary)
-* Conform to [Google Python Style Guide](https://github.com/google/styleguide/blob/gh-pages/pyguide.md)
+| Model | Reference (Paper) |
+|-------|-------------------|
+| [NCF](recommendation) | [Neural Collaborative Filtering](https://arxiv.org/abs/1708.05031) |
 
-**Implementation guidelines**
+## How to get started with the official models
 
-These guidelines exist so the model implementations are consistent for better readability and maintainability.
+* The models in the master branch are developed using TensorFlow 2,
+and they target the TensorFlow [nightly binaries](https://github.com/tensorflow/tensorflow#installation)
+built from the
+[master branch of TensorFlow](https://github.com/tensorflow/tensorflow/tree/master).
+* The stable versions targeting releases of TensorFlow are available
+as tagged branches or [downloadable releases](https://github.com/tensorflow/models/releases).
+* Model repository version numbers match the target TensorFlow release,
+such that
+[release v2.2.0](https://github.com/tensorflow/models/releases/tag/v2.2.0)
+are compatible with
+[TensorFlow v2.2.0](https://github.com/tensorflow/tensorflow/releases/tag/v2.2.0).
 
-* Use [common utility functions](utils)
-* Export SavedModel at the end of training.
-* Consistent flags and flag-parsing library ([read more here](utils/flags/guidelines.md))
-* Produce benchmarks and logs ([read more here](utils/logs/guidelines.md))
+Please follow the below steps before running models in this repository.
+
+### Requirements
+
+* The latest TensorFlow Model Garden release and TensorFlow 2
+  * If you are on a version of TensorFlow earlier than 2.2, please
+upgrade your TensorFlow to [the latest TensorFlow 2](https://www.tensorflow.org/install/).
+
+```shell
+pip3 install tf-nightly
+```
+
+### Installation
+
+#### Method 1: Install the TensorFlow Model Garden pip package
+
+**tf-models-official** is the stable Model Garden package.
+pip will install all models and dependencies automatically.
+
+```shell
+pip install tf-models-official
+```
+
+If you are using nlp packages, please also install **tensorflow-text**:
+
+```shell
+pip install tensorflow-text
+```
+
+Please check out our [example](colab/fine_tuning_bert.ipynb)
+to learn how to use a PIP package.
+
+Note that **tf-models-official** may not include the latest changes in this
+github repo. To include latest changes, you may install **tf-models-nightly**,
+which is the nightly Model Garden package created daily automatically.
+
+```shell
+pip install tf-models-nightly
+```
+
+#### Method 2: Clone the source
+
+1. Clone the GitHub repository:
+
+```shell
+git clone https://github.com/tensorflow/models.git
+```
+
+2. Add the top-level ***/models*** folder to the Python path.
+
+```shell
+export PYTHONPATH=$PYTHONPATH:/path/to/models
+```
+
+If you are using a Colab notebook, please set the Python path with os.environ.
+
+```python
+import os
+os.environ['PYTHONPATH'] += ":/path/to/models"
+```
+
+3. Install other dependencies
+
+```shell
+pip3 install --user -r official/requirements.txt
+```
+
+Finally, if you are using nlp packages, please also install
+**tensorflow-text-nightly**:
+
+```shell
+pip3 install tensorflow-text-nightly
+```
+
+## Contributions
+
+If you want to contribute, please review the [contribution guidelines](https://github.com/tensorflow/models/wiki/How-to-contribute).
+
+## Citing TF Official Model Garden
+
+To cite this repository:
+
+```
+@software{tfmodels2020github,
+  author = {Chen Chen and Xianzhi Du and Le Hou and Jaeyoun Kim and Jing Li and
+  Yeqing Li and Abdullah Rashwan and Fan Yang and Hongkun Yu},
+  title = {TensorFlow Official Model Garden},
+  url = {https://github.com/tensorflow/models/tree/master/official},
+  year = {2020},
+}
+```

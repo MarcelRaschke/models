@@ -25,13 +25,11 @@ This executable is used to evaluate DetectionModels. Example usage:
 
 import functools
 import os
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 from google.protobuf import text_format
-from google3.pyglib import app
-from google3.pyglib import flags
 from lstm_object_detection import evaluator
 from lstm_object_detection import model_builder
-from lstm_object_detection import seq_dataset_builder
+from lstm_object_detection.inputs import seq_dataset_builder
 from lstm_object_detection.utils import config_util
 from object_detection.utils import label_map_util
 
@@ -107,4 +105,4 @@ def main(unused_argv):
                      FLAGS.checkpoint_dir, FLAGS.eval_dir)
 
 if __name__ == '__main__':
-  app.run()
+  tf.app.run()

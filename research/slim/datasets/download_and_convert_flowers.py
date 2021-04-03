@@ -32,7 +32,9 @@ import os
 import random
 import sys
 
-import tensorflow as tf
+from six.moves import range
+from six.moves import zip
+import tensorflow.compat.v1 as tf
 
 from datasets import dataset_utils
 
@@ -136,7 +138,7 @@ def _convert_dataset(split_name, filenames, class_names_to_ids, dataset_dir):
             sys.stdout.flush()
 
             # Read the filename:
-            image_data = tf.gfile.FastGFile(filenames[i], 'rb').read()
+            image_data = tf.gfile.GFile(filenames[i], 'rb').read()
             height, width = image_reader.read_image_dims(sess, image_data)
 
             class_name = os.path.basename(os.path.dirname(filenames[i]))
@@ -189,7 +191,8 @@ def run(dataset_dir):
 
   dataset_utils.download_and_uncompress_tarball(_DATA_URL, dataset_dir)
   photo_filenames, class_names = _get_filenames_and_classes(dataset_dir)
-  class_names_to_ids = dict(zip(class_names, range(len(class_names))))
+  class_names_to_ids = dict(
+      list(zip(class_names, list(range(len(class_names))))))
 
   # Divide into train and test:
   random.seed(_RANDOM_SEED)
@@ -204,7 +207,8 @@ def run(dataset_dir):
                    dataset_dir)
 
   # Finally, write the labels file:
-  labels_to_class_names = dict(zip(range(len(class_names)), class_names))
+  labels_to_class_names = dict(
+      list(zip(list(range(len(class_names))), class_names)))
   dataset_utils.write_label_file(labels_to_class_names, dataset_dir)
 
   _clean_up_temporary_files(dataset_dir)

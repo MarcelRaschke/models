@@ -23,11 +23,10 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+import tf_slim as slim
 
 from datasets import dataset_utils
-
-slim = tf.contrib.slim
 
 _FILE_PATTERN = 'cifar10_%s.tfrecord'
 

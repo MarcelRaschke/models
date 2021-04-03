@@ -10,9 +10,9 @@ models.
 Un-tar'ed directory includes:
 
 *   a frozen inference graph (`frozen_inference_graph.pb`). All frozen inference
-    graphs use output stride of 8 and a single eval scale of 1.0. No left-right
-    flips are used, and MobileNet-v2 based models do not include the decoder
-    module.
+    graphs by default use output stride of 8, a single eval scale of 1.0 and
+    no left-right flips, unless otherwise specified. MobileNet-v2 based models
+    do not include the decoder module.
 
 *   a checkpoint (`model.ckpt.data-00000-of-00001`, `model.ckpt.index`)
 
@@ -28,12 +28,12 @@ employ ASPP and decoder modules for fast computation.
 
 Checkpoint name             | Network backbone | Pretrained  dataset | ASPP  | Decoder
 --------------------------- | :--------------: | :-----------------: | :---: | :-----:
-mobilenetv2_dm05_coco_voc_trainaug | MobileNet-v2 <br> Depth-Multiplier = 0.5  | MS-COCO <br> VOC 2012 train_aug set| N/A | N/A
-mobilenetv2_dm05_coco_voc_trainval | MobileNet-v2 <br> Depth-Multiplier = 0.5  | MS-COCO <br> VOC 2012 train_aug + trainval sets | N/A | N/A
-mobilenetv2_coco_voc_trainaug | MobileNet-v2  | MS-COCO <br> VOC 2012 train_aug set| N/A | N/A
-mobilenetv2_coco_voc_trainval | MobileNet-v2  | MS-COCO <br> VOC 2012 train_aug + trainval sets | N/A | N/A
-xception65_coco_voc_trainaug  | Xception_65  | MS-COCO <br> VOC 2012 train_aug set| [6,12,18] for OS=16 <br> [12,24,36] for OS=8 | OS = 4
-xception65_coco_voc_trainval  | Xception_65  | MS-COCO <br> VOC 2012 train_aug + trainval sets | [6,12,18] for OS=16 <br> [12,24,36] for OS=8 | OS = 4
+mobilenetv2_dm05_coco_voc_trainaug | MobileNet-v2 <br> Depth-Multiplier = 0.5  | ImageNet <br> MS-COCO <br> VOC 2012 train_aug set| N/A | N/A
+mobilenetv2_dm05_coco_voc_trainval | MobileNet-v2 <br> Depth-Multiplier = 0.5  | ImageNet <br> MS-COCO <br> VOC 2012 train_aug + trainval sets | N/A | N/A
+mobilenetv2_coco_voc_trainaug | MobileNet-v2  | ImageNet <br> MS-COCO <br> VOC 2012 train_aug set| N/A | N/A
+mobilenetv2_coco_voc_trainval | MobileNet-v2  | ImageNet <br> MS-COCO <br> VOC 2012 train_aug + trainval sets | N/A | N/A
+xception65_coco_voc_trainaug  | Xception_65  | ImageNet <br> MS-COCO <br> VOC 2012 train_aug set| [6,12,18] for OS=16 <br> [12,24,36] for OS=8 | OS = 4
+xception65_coco_voc_trainval  | Xception_65  | ImageNet <br> MS-COCO <br> VOC 2012 train_aug + trainval sets | [6,12,18] for OS=16 <br> [12,24,36] for OS=8 | OS = 4
 
 In the table, **OS** denotes output stride.
 
@@ -64,21 +64,81 @@ dataset and does not employ ASPP and decoder modules for fast computation.
 
 Checkpoint name                       | Network backbone | Pretrained dataset                      | ASPP                                             | Decoder
 ------------------------------------- | :--------------: | :-------------------------------------: | :----------------------------------------------: | :-----:
-mobilenetv2_coco_cityscapes_trainfine | MobileNet-v2     | MS-COCO <br> Cityscapes train_fine set  | N/A                                              | N/A
+mobilenetv2_coco_cityscapes_trainfine | MobileNet-v2     | ImageNet <br> MS-COCO <br> Cityscapes train_fine set  | N/A                                              | N/A
+mobilenetv3_large_cityscapes_trainfine | MobileNet-v3 Large | Cityscapes train_fine set <br> (No ImageNet) | N/A                                              | OS = 8
+mobilenetv3_small_cityscapes_trainfine | MobileNet-v3 Small | Cityscapes train_fine set <br> (No ImageNet) | N/A                                              | OS = 8
 xception65_cityscapes_trainfine         | Xception_65      | ImageNet <br> Cityscapes train_fine set | [6, 12, 18] for OS=16 <br> [12, 24, 36] for OS=8 | OS = 4
 xception71_dpc_cityscapes_trainfine         | Xception_71      | ImageNet <br> MS-COCO <br> Cityscapes train_fine set | Dense Prediction Cell | OS = 4
 xception71_dpc_cityscapes_trainval         | Xception_71      | ImageNet <br> MS-COCO <br> Cityscapes trainval_fine and coarse set | Dense Prediction Cell | OS = 4
 
 In the table, **OS** denotes output stride.
 
+Note for mobilenet v3 models, we use additional commandline flags as follows:
+
+```
+--model_variant={ mobilenet_v3_large_seg | mobilenet_v3_small_seg }
+--image_pooling_crop_size=769,769
+--image_pooling_stride=4,5
+--add_image_level_feature=1
+--aspp_convs_filters=128
+--aspp_with_concat_projection=0
+--aspp_with_squeeze_and_excitation=1
+--decoder_use_sum_merge=1
+--decoder_filters=19
+--decoder_output_is_logits=1
+--image_se_uses_qsigmoid=1
+--decoder_output_stride=8
+--output_stride=32
+```
+
 Checkpoint name                                                                                                                  | Eval OS   | Eval scales                 | Left-right Flip | Multiply-Adds         | Runtime (sec)  | Cityscapes mIOU                | File Size
 -------------------------------------------------------------------------------------------------------------------------------- | :-------: | :-------------------------: | :-------------: | :-------------------: | :------------: | :----------------------------: | :-------:
 [mobilenetv2_coco_cityscapes_trainfine](http://download.tensorflow.org/models/deeplabv3_mnv2_cityscapes_train_2018_02_05.tar.gz) | 16 <br> 8 | [1.0] <br> [0.75:0.25:1.25] | No <br> Yes     | 21.27B <br> 433.24B   | 0.8 <br> 51.12 | 70.71% (val) <br> 73.57% (val) | 23MB
+[mobilenetv3_large_cityscapes_trainfine](http://download.tensorflow.org/models/deeplab_mnv3_large_cityscapes_trainfine_2019_11_15.tar.gz) | 32 | [1.0] | No  | 15.95B   | 0.6 | 72.41% (val) | 17MB
+[mobilenetv3_small_cityscapes_trainfine](http://download.tensorflow.org/models/deeplab_mnv3_small_cityscapes_trainfine_2019_11_15.tar.gz) | 32 | [1.0] | No  | 4.63B   | 0.4 | 68.99% (val) | 5MB
 [xception65_cityscapes_trainfine](http://download.tensorflow.org/models/deeplabv3_cityscapes_train_2018_02_06.tar.gz)              | 16 <br> 8 | [1.0] <br> [0.75:0.25:1.25] | No <br> Yes     | 418.64B <br> 8677.92B | 5.0 <br> 422.8 | 78.79% (val) <br> 80.42% (val) | 439MB
 [xception71_dpc_cityscapes_trainfine](http://download.tensorflow.org/models/deeplab_cityscapes_xception71_trainfine_2018_09_08.tar.gz) | 16 | [1.0] | No  | 502.07B | - | 80.31% (val) | 445MB
 [xception71_dpc_cityscapes_trainval](http://download.tensorflow.org/models/deeplab_cityscapes_xception71_trainvalfine_2018_09_08.tar.gz) | 8 | [0.75:0.25:2] | Yes  | - | - | 82.66% (**test**) | 446MB
 
+### EdgeTPU-DeepLab models on Cityscapes
 
+EdgeTPU is Google's machine learning accelerator architecture for edge devices
+(exists in Coral devices and Pixel4's Neural Core). Leveraging nerual
+architecture search (NAS, also named as Auto-ML) algorithms,
+[EdgeTPU-Mobilenet](https://github.com/tensorflow/models/tree/master/research/slim/nets/mobilenet)
+has been released which yields higher hardware utilization, lower latency, as
+well as better accuracy over Mobilenet-v2/v3. We use EdgeTPU-Mobilenet as the
+backbone and provide checkpoints that have been pretrained on Cityscapes
+train_fine set. We named them as EdgeTPU-DeepLab models.
+
+Checkpoint name      | Network backbone   | Pretrained dataset | ASPP | Decoder
+-------------------- | :----------------: | :----------------: | :--: | :-----:
+EdgeTPU-DeepLab      | EdgeMobilenet-1.0  | ImageNet           | N/A  | N/A
+EdgeTPU-DeepLab-slim | EdgeMobilenet-0.75 | ImageNet           | N/A  | N/A
+
+For EdgeTPU-DeepLab-slim, the backbone feature extractor has depth multiplier =
+0.75 and aspp_convs_filters = 128. We do not employ ASPP nor decoder modules to
+further reduce the latency. We employ the same train/eval flags used for
+MobileNet-v2 DeepLab model. Flags changed for EdgeTPU-DeepLab model are listed
+here.
+
+```
+--decoder_output_stride=''
+--aspp_convs_filters=256
+--model_variant=mobilenet_edgetpu
+```
+
+For EdgeTPU-DeepLab-slim, also include the following flags.
+
+```
+--depth_multiplier=0.75
+--aspp_convs_filters=128
+```
+
+Checkpoint name                                                                                      | Eval OS    | Eval scales | Cityscapes mIOU              | Multiply-Adds  | Simulator latency on Pixel 4 EdgeTPU
+---------------------------------------------------------------------------------------------------- | :--------: | :---------: | :--------------------------: | :------------: | :----------------------------------:
+[EdgeTPU-DeepLab](http://download.tensorflow.org/models/edgetpu-deeplab_2020_03_09.tar.gz)           | 32 <br> 16 | [1.0]       | 70.6% (val) <br> 74.1% (val) | 5.6B <br> 7.1B | 13.8 ms <br> 17.5 ms
+[EdgeTPU-DeepLab-slim](http://download.tensorflow.org/models/edgetpu-deeplab-slim_2020_03_09.tar.gz) | 32 <br> 16 | [1.0]       | 70.0% (val) <br> 73.2% (val) | 3.5B <br> 4.3B | 9.9 ms <br> 13.2 ms
 
 ## DeepLab models trained on ADE20K
 
@@ -88,13 +148,18 @@ We provide some checkpoints that have been pretrained on ADE20K training set.
 Note that the model has only been pretrained on ImageNet, following the
 dataset rule.
 
-Checkpoint name                       | Network backbone | Pretrained dataset                      | ASPP                                             | Decoder
-------------------------------------- | :--------------: | :-------------------------------------: | :----------------------------------------------: | :-----:
-xception65_ade20k_train                 | Xception_65      | ImageNet <br> ADE20K training set       | [6, 12, 18] for OS=16 <br> [12, 24, 36] for OS=8 | OS = 4
+Checkpoint name                       | Network backbone | Pretrained dataset                      | ASPP                                             | Decoder | Input size
+------------------------------------- | :--------------: | :-------------------------------------: | :----------------------------------------------: | :-----: | :-----:
+mobilenetv2_ade20k_train              | MobileNet-v2     | ImageNet <br> ADE20K training set       | N/A                                              | OS = 4  | 257x257
+xception65_ade20k_train               | Xception_65      | ImageNet <br> ADE20K training set       | [6, 12, 18] for OS=16 <br> [12, 24, 36] for OS=8 | OS = 4  | 513x513
+
+The input dimensions of ADE20K have a huge amount of variation. We resize inputs so that the longest size is 257 for MobileNet-v2 (faster inference) and 513 for Xception_65 (better performation). Note that we also include the decoder module in the MobileNet-v2 checkpoint.
 
 Checkpoint name                       | Eval OS   | Eval scales                 | Left-right Flip |  mIOU                 | Pixel-wise Accuracy | File Size
 ------------------------------------- | :-------: | :-------------------------: | :-------------: | :-------------------: | :-------------------: | :-------:
-[xception65_ade20k_train](http://download.tensorflow.org/models/deeplabv3_xception_ade20k_train_2018_05_29.tar.gz)              | 8 | [0.5:0.25:1.75] | Yes     | 45.65% (val) | 82.52% (val) | 439MB
+[mobilenetv2_ade20k_train](http://download.tensorflow.org/models/deeplabv3_mnv2_ade20k_train_2018_12_03.tar.gz)           | 16 | [1.0] | No     | 32.04% (val) | 75.41% (val) | 24.8MB
+[xception65_ade20k_train](http://download.tensorflow.org/models/deeplabv3_xception_ade20k_train_2018_05_29.tar.gz)        | 8 | [0.5:0.25:1.75] | Yes     | 45.65% (val) | 82.52% (val) | 439MB
+
 
 ## Checkpoints pretrained on ImageNet
 
@@ -183,3 +248,7 @@ Model name                                                                      
     Bolei Zhou, Hang Zhao, Xavier Puig, Sanja Fidler, Adela Barriuso, Antonio Torralba<br />
     [[link]](http://groups.csail.mit.edu/vision/datasets/ADE20K/). In CVPR,
     2017.
+
+13. **Searching for MobileNetV3**<br />
+    Andrew Howard, Mark Sandler, Grace Chu, Liang-Chieh Chen, Bo Chen, Mingxing Tan, Weijun Wang, Yukun Zhu, Ruoming Pang, Vijay Vasudevan, Quoc V. Le, Hartwig Adam<br />
+    [[link]](https://arxiv.org/abs/1905.02244). In ICCV, 2019.

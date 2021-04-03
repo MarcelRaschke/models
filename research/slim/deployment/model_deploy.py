@@ -101,9 +101,8 @@ from __future__ import print_function
 
 import collections
 
-import tensorflow as tf
-
-slim = tf.contrib.slim
+import tensorflow.compat.v1 as tf
+import tf_slim as slim
 
 
 __all__ = ['create_clones',

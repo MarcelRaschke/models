@@ -15,9 +15,11 @@
 
 """A function to build localization and classification losses from config."""
 
+import functools
 from object_detection.core import balanced_positive_negative_sampler as sampler
 from object_detection.core import losses
 from object_detection.protos import losses_pb2
+from object_detection.utils import ops
 
 
 def build(loss_config):
@@ -66,8 +68,28 @@ def build(loss_config):
     random_example_sampler = sampler.BalancedPositiveNegativeSampler(
         positive_fraction=loss_config.random_example_sampler.
         positive_sample_fraction)
+
+  if loss_config.expected_loss_weights == loss_config.NONE:
+    expected_loss_weights_fn = None
+  elif loss_config.expected_loss_weights == loss_config.EXPECTED_SAMPLING:
+    expected_loss_weights_fn = functools.partial(
+        ops.expected_classification_loss_by_expected_sampling,
+        min_num_negative_samples=loss_config.min_num_negative_samples,
+        desired_negative_sampling_ratio=loss_config
+        .desired_negative_sampling_ratio)
+  elif (loss_config.expected_loss_weights == loss_config
+        .REWEIGHTING_UNMATCHED_ANCHORS):
+    expected_loss_weights_fn = functools.partial(
+        ops.expected_classification_loss_by_reweighting_unmatched_anchors,
+        min_num_negative_samples=loss_config.min_num_negative_samples,
+        desired_negative_sampling_ratio=loss_config
+        .desired_negative_sampling_ratio)
+  else:
+    raise ValueError('Not a valid value for expected_classification_loss.')
+
   return (classification_loss, localization_loss, classification_weight,
-          localization_weight, hard_example_miner, random_example_sampler)
+          localization_weight, hard_example_miner, random_example_sampler,
+          expected_loss_weights_fn)
 
 
 def build_hard_example_miner(config,
@@ -179,6 +201,12 @@ def _build_localization_loss(loss_config):
   if loss_type == 'weighted_iou':
     return losses.WeightedIOULocalizationLoss()
 
+  if loss_type == 'l1_localization_loss':
+    return losses.L1LocalizationLoss()
+
+  if loss_type == 'weighted_giou':
+    return losses.WeightedGIOULocalizationLoss()
+
   raise ValueError('Empty loss config.')
 
 
@@ -202,7 +230,7 @@ def _build_classification_loss(loss_config):
   if loss_type == 'weighted_sigmoid':
     return losses.WeightedSigmoidClassificationLoss()
 
-  if loss_type == 'weighted_sigmoid_focal':
+  elif loss_type == 'weighted_sigmoid_focal':
     config = loss_config.weighted_sigmoid_focal
     alpha = None
     if config.HasField('alpha'):
@@ -211,20 +239,31 @@ def _build_classification_loss(loss_config):
         gamma=config.gamma,
         alpha=alpha)
 
-  if loss_type == 'weighted_softmax':
+  elif loss_type == 'weighted_softmax':
     config = loss_config.weighted_softmax
     return losses.WeightedSoftmaxClassificationLoss(
         logit_scale=config.logit_scale)
 
-  if loss_type == 'weighted_logits_softmax':
+  elif loss_type == 'weighted_logits_softmax':
     config = loss_config.weighted_logits_softmax
     return losses.WeightedSoftmaxClassificationAgainstLogitsLoss(
         logit_scale=config.logit_scale)
 
-  if loss_type == 'bootstrapped_sigmoid':
+  elif loss_type == 'bootstrapped_sigmoid':
     config = loss_config.bootstrapped_sigmoid
     return losses.BootstrappedSigmoidClassificationLoss(
         alpha=config.alpha,
         bootstrap_type=('hard' if config.hard_bootstrap else 'soft'))
 
-  raise ValueError('Empty loss config.')
+  elif loss_type == 'penalty_reduced_logistic_focal_loss':
+    config = loss_config.penalty_reduced_logistic_focal_loss
+    return losses.PenaltyReducedLogisticFocalLoss(
+        alpha=config.alpha, beta=config.beta)
+
+  elif loss_type == 'weighted_dice_classification_loss':
+    config = loss_config.weighted_dice_classification_loss
+    return losses.WeightedDiceClassificationLoss(
+        squared_normalization=config.squared_normalization)
+
+  else:
+    raise ValueError('Empty loss config.')
