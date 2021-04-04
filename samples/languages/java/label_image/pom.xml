@@ -14,7 +14,7 @@
       <dependency>
         <groupId>org.tensorflow</groupId>
         <artifactId>tensorflow</artifactId>
-        <version>1.4.0</version>
+        <version>1.15.0</version>
       </dependency>
       <!-- For ByteStreams.toByteArray: https://google.github.io/guava/releases/23.0/api/docs/com/google/common/io/ByteStreams.html --> 
       <dependency>
